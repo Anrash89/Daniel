@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Молитвенный круг</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Небольшая «сакральная» анимация круга */
+    .halo {
+      position: absolute;
+      inset: -40px;
+      border-radius: 9999px;
+      background: radial-gradient(closest-side, rgba(255,255,255,.35), transparent 70%);
+      filter: blur(12px);
+      animation: pulse 3s ease-in-out infinite;
+      pointer-events: none;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: .6; transform: scale(1); }
+      50% { opacity: .9; transform: scale(1.03); }
+    }
+    .fade-in {
+      animation: fade .5s ease forwards;
+      opacity: 0;
+    }
+    @keyframes fade {
+      to { opacity: 1; }
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-amber-50 text-stone-800 antialiased">
+  <div class="absolute inset-0 bg-gradient-to-b from-amber-100/70 to-amber-50 pointer-events-none"></div>
+
+  <main class="relative container mx-auto px-4 py-10">
+    <header class="mb-8 text-center">
+      <h1 class="text-3xl md:text-4xl font-semibold tracking-tight">
+        Молитвенный круг
+      </h1>
+      <p class="text-stone-600 mt-2">Справедливая жеребьёвка: без самоназначений и без повторов пар из последних 5 кругов.</p>
+    </header>
+
+    <section class="grid md:grid-cols-3 gap-6">
+      <!-- Левая колонка: участники -->
+      <div class="md:col-span-1">
+        <div class="relative bg-white rounded-2xl shadow p-5">
+          <div class="halo"></div>
+          <h2 class="text-lg font-medium mb-3">Участники</h2>
+          <ul id="peopleList" class="space-y-1 text-sm text-stone-700">
+            <li class="italic text-stone-400">Загрузка…</li>
+          </ul>
+        </div>
+
+        <div class="mt-6 bg-white rounded-2xl shadow p-5">
+          <h3 class="text-base font-medium mb-2">Действия</h3>
+          <button id="generateBtn" class="w-full rounded-xl px-4 py-3 bg-amber-600 text-white font-medium hover:bg-amber-700 active:scale-[.99] transition">
+            Сформировать новый круг
+          </button>
+          <p class="text-xs text-stone-500 mt-2">
+            Алгоритм подбирает перестановку (дерранжмент) с учётом истории 5 последних кругов.
+          </p>
+        </div>
+      </div>
+
+      <!-- Центр: текущий результат -->
+      <div class="md:col-span-2">
+        <div class="relative bg-white rounded-2xl shadow p-6">
+          <div class="halo"></div>
+          <h2 class="text-lg font-medium mb-4">Текущий круг</h2>
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+              <thead>
+                <tr class="text-left text-stone-500">
+                  <th class="px-3 py-2">Кто молится</th>
+                  <th class="px-3 py-2"></th>
+                  <th class="px-3 py-2">За кого</th>
+                </tr>
+              </thead>
+              <tbody id="pairsTableBody">
+                <tr><td class="px-3 py-3 italic text-stone-400" colspan="3">Нажмите «Сформировать новый круг»</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="mt-5 flex gap-3">
+            <button id="saveBtn" disabled class="rounded-xl px-4 py-2 bg-stone-200 text-stone-500 font-medium cursor-not-allowed">
+              Сохранить круг
+            </button>
+            <span id="status" class="text-sm text-stone-500"></span>
+          </div>
+        </div>
+
+        <!-- История -->
+        <div class="mt-6 bg-white rounded-2xl shadow p-6">
+          <h2 class="text-lg font-medium mb-4">Последние 5 кругов</h2>
+          <div id="history" class="space-y-4 text-sm">
+            <div class="italic text-stone-400">Загрузка…</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // ====== НАСТРОЙКА: URL веб-приложения Apps Script ======
+    const GAS_WEB_APP_URL = "PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE"; // <-- ЗАМЕНИТЕ
+
+    const state = {
+      people: [],
+      lastRounds: [], // [{ts, roundId, pairs:[[giver,receiver],...]}]
+      currentPairs: null
+    };
+
+    const $peopleList = document.getElementById('peopleList');
+    const $pairsTableBody = document.getElementById('pairsTableBody');
+    const $history = document.getElementById('history');
+    const $generateBtn = document.getElementById('generateBtn');
+    const $saveBtn = document.getElementById('saveBtn');
+    const $status = document.getElementById('status');
+
+    init();
+
+    async function init() {
+      await refreshData();
+      renderPeople();
+      renderHistory();
+      $generateBtn.addEventListener('click', onGenerate);
+      $saveBtn.addEventListener('click', onSave);
+    }
+
+    async function refreshData() {
+      $status.textContent = "Загружаем данные…";
+      const url = `${GAS_WEB_APP_URL}?action=get`;
+      const res = await fetch(url, { method: "GET" });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "Ошибка загрузки");
+      state.people = data.people || [];
+      state.lastRounds = (data.lastRounds || []).map(r => ({
+        ts: r.ts,
+        roundId: r.roundId,
+        pairs: r.pairs
+      }));
+      $status.textContent = "";
+    }
+
+    function renderPeople() {
+      if (!state.people.length) {
+        $peopleList.innerHTML = '<li class="text-rose-600">Список пуст. Добавьте имена в лист «People» Google Sheets.</li>';
+        return;
+      }
+      $peopleList.innerHTML = state.people
+        .map(name => `<li class="fade-in">${escapeHtml(name)}</li>`)
+        .join("");
+    }
+
+    function renderHistory() {
+      if (!state.lastRounds.length) {
+        $history.innerHTML = '<div class="italic text-stone-400">История пока пустая.</div>';
+        return;
+      }
+      $history.innerHTML = state.lastRounds.map(r => {
+        const date = r.ts ? new Date(r.ts) : null;
+        const nice = date ? date.toLocaleString() : "(без даты)";
+        const rows = r.pairs.map(([g, t]) =>
+          `<tr><td class="px-2 py-1">${escapeHtml(g)}</td><td class="px-2 py-1 text-center">→</td><td class="px-2 py-1">${escapeHtml(t)}</td></tr>`
+        ).join("");
+        return `
+          <div class="rounded-xl border border-stone-100">
+            <div class="px-3 py-2 bg-stone-50 text-stone-600">Круг #${r.roundId} • ${nice}</div>
+            <div class="overflow-x-auto">
+              <table class="min-w-full text-sm">
+                <tbody>${rows}</tbody>
+              </table>
+            </div>
+          </div>`;
+      }).join("");
+    }
+
+    async function onGenerate() {
+      if (state.people.length < 2) {
+        $status.textContent = "Нужно минимум 2 участника.";
+        return;
+      }
+      $status.textContent = "Ищем допустимую перестановку…";
+
+      // Собираем запрещённые пары по последним 5 кругам
+      const forbidden = new Set();
+      state.lastRounds.forEach(r => {
+        (r.pairs || []).forEach(([g, t]) => {
+          forbidden.add(`${g}||${t}`);
+        });
+      });
+
+      const people = [...state.people];
+
+      // Ищем перестановку с ограничениями через backtracking (MRV)
+      const solution = findDerangementWithConstraints(people, forbidden);
+
+      if (!solution) {
+        $status.textContent = "Не получилось составить круг (слишком жёсткие ограничения). Попробуйте добавить участников.";
+        return;
+      }
+      state.currentPairs = solution.map((receiver, i) => [people[i], receiver]);
+      renderCurrentPairs();
+      $saveBtn.disabled = false;
+      $saveBtn.className = "rounded-xl px-4 py-2 bg-emerald-600 text-white font-medium hover:bg-emerald-700 transition";
+      $status.textContent = "Круг готов. Можно сохранить.";
+    }
+
+    function renderCurrentPairs() {
+      const rows = state.currentPairs.map(([g, t]) =>
+        `<tr class="fade-in">
+          <td class="px-3 py-2 font-medium">${escapeHtml(g)}</td>
+          <td class="px-3 py-2 text-center">→</td>
+          <td class="px-3 py-2">${escapeHtml(t)}</td>
+        </tr>`
+      ).join("");
+      $pairsTableBody.innerHTML = rows;
+    }
+
+    async function onSave() {
+      if (!state.currentPairs) return;
+      $status.textContent = "Сохраняем круг…";
+      $saveBtn.disabled = true;
+
+      const res = await fetch(GAS_WEB_APP_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "saveRound", pairs: state.currentPairs })
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        $status.textContent = "Ошибка сохранения: " + (data.error || "неизвестно");
+        $saveBtn.disabled = false;
+        return;
+      }
+      // Обновим данные и UI
+      await refreshData();
+      renderHistory();
+      $status.textContent = `Сохранено как круг #${data.roundId}.`;
+      $saveBtn.disabled = true;
+      $saveBtn.className = "rounded-xl px-4 py-2 bg-stone-200 text-stone-500 font-medium cursor-not-allowed";
+    }
+
+    // ====== Алгоритм: дерранжмент с ограничениями по запрещённым парам ======
+    function findDerangementWithConstraints(people, forbidden) {
+      // домены: для каждого i (giver = people[i]) список допустимых receiver
+      const n = people.length;
+      const domains = people.map((giver, i) => {
+        return people.filter((rcv, j) =>
+          i !== j && !forbidden.has(`${giver}||${rcv}`)
+        );
+      });
+
+      // быстрый провал, если кто-то вообще никого не может получить
+      if (domains.some(d => d.length === 0)) return null;
+
+      const assignment = new Array(n).fill(null); // receiver per index i
+      const used = new Set();
+
+      // Backtracking с MRV (выбираем переменную с минимальным доменом)
+      function backtrack() {
+        // найдём первую не назначенную переменную
+        let varIndex = -1, bestSize = Infinity;
+        for (let i = 0; i < n; i++) {
+          if (assignment[i] !== null) continue;
+          const size = domains[i].filter(v => !used.has(v)).length;
+          if (size < bestSize) {
+            bestSize = size;
+            varIndex = i;
+            if (bestSize === 0) break;
+          }
+        }
+        if (varIndex === -1) return true; // назначены все
+
+        // Порядок значений случайный для разнообразия
+        const candidates = domains[varIndex].filter(v => !used.has(v));
+        shuffleInPlace(candidates);
+
+        for (const val of candidates) {
+          assignment[varIndex] = val;
+          used.add(val);
+          if (backtrack()) return true;
+          assignment[varIndex] = null;
+          used.delete(val);
+        }
+        return false;
+      }
+
+      if (!backtrack()) return null;
+      return assignment;
+    }
+
+    function shuffleInPlace(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/[&<>"']/g, (ch) =>
+        ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[ch])
+      );
+    }
+  </script>
+</body>
+</html>
