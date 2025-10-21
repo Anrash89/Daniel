@@ -6,7 +6,6 @@
   <title>Молитвенный круг</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    /* Небольшая «сакральная» анимация круга */
     .halo {
       position: absolute;
       inset: -40px;
@@ -41,7 +40,6 @@
     </header>
 
     <section class="grid md:grid-cols-3 gap-6">
-      <!-- Левая колонка: участники -->
       <div class="md:col-span-1">
         <div class="relative bg-white rounded-2xl shadow p-5">
           <div class="halo"></div>
@@ -62,7 +60,6 @@
         </div>
       </div>
 
-      <!-- Центр: текущий результат -->
       <div class="md:col-span-2">
         <div class="relative bg-white rounded-2xl shadow p-6">
           <div class="halo"></div>
@@ -90,7 +87,6 @@
           </div>
         </div>
 
-        <!-- История -->
         <div class="mt-6 bg-white rounded-2xl shadow p-6">
           <h2 class="text-lg font-medium mb-4">Последние 5 кругов</h2>
           <div id="history" class="space-y-4 text-sm">
@@ -102,14 +98,10 @@
   </main>
 
   <script>
-    // ====== НАСТРОЙКА: URL веб-приложения Apps Script ======
-    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzJCV1bGiwI0nLpFSrfplqegQ5IFKIOfW0KyihozEY-2EMj-vawRMn7rInZqqnSUfFtaQ/exec"; // <-- ЗАМЕНИТЕ
+    // ====== URL твоего скрипта ======
+    const GAS_WEB_APP_URL = "https://script.google.com/macros/library/d/1VRlb8nm7euYY2moZMuJUYTIHUxDQzbqIBDBl8uFvqGdEAIszg1B85_ci/2";
 
-    const state = {
-      people: [],
-      lastRounds: [], // [{ts, roundId, pairs:[[giver,receiver],...]}]
-      currentPairs: null
-    };
+    const state = { people: [], lastRounds: [], currentPairs: null };
 
     const $peopleList = document.getElementById('peopleList');
     const $pairsTableBody = document.getElementById('pairsTableBody');
@@ -130,16 +122,11 @@
 
     async function refreshData() {
       $status.textContent = "Загружаем данные…";
-      const url = `${GAS_WEB_APP_URL}?action=get`;
-      const res = await fetch(url, { method: "GET" });
+      const res = await fetch(`${GAS_WEB_APP_URL}?action=get`);
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || "Ошибка загрузки");
       state.people = data.people || [];
-      state.lastRounds = (data.lastRounds || []).map(r => ({
-        ts: r.ts,
-        roundId: r.roundId,
-        pairs: r.pairs
-      }));
+      state.lastRounds = data.lastRounds || [];
       $status.textContent = "";
     }
 
@@ -148,9 +135,7 @@
         $peopleList.innerHTML = '<li class="text-rose-600">Список пуст. Добавьте имена в лист «People» Google Sheets.</li>';
         return;
       }
-      $peopleList.innerHTML = state.people
-        .map(name => `<li class="fade-in">${escapeHtml(name)}</li>`)
-        .join("");
+      $peopleList.innerHTML = state.people.map(name => `<li class="fade-in">${escapeHtml(name)}</li>`).join("");
     }
 
     function renderHistory() {
@@ -182,22 +167,12 @@
         return;
       }
       $status.textContent = "Ищем допустимую перестановку…";
-
-      // Собираем запрещённые пары по последним 5 кругам
       const forbidden = new Set();
-      state.lastRounds.forEach(r => {
-        (r.pairs || []).forEach(([g, t]) => {
-          forbidden.add(`${g}||${t}`);
-        });
-      });
-
+      state.lastRounds.forEach(r => (r.pairs || []).forEach(([g, t]) => forbidden.add(`${g}||${t}`)));
       const people = [...state.people];
-
-      // Ищем перестановку с ограничениями через backtracking (MRV)
       const solution = findDerangementWithConstraints(people, forbidden);
-
       if (!solution) {
-        $status.textContent = "Не получилось составить круг (слишком жёсткие ограничения). Попробуйте добавить участников.";
+        $status.textContent = "Не получилось составить круг. Добавьте участников.";
         return;
       }
       state.currentPairs = solution.map((receiver, i) => [people[i], receiver]);
@@ -209,11 +184,7 @@
 
     function renderCurrentPairs() {
       const rows = state.currentPairs.map(([g, t]) =>
-        `<tr class="fade-in">
-          <td class="px-3 py-2 font-medium">${escapeHtml(g)}</td>
-          <td class="px-3 py-2 text-center">→</td>
-          <td class="px-3 py-2">${escapeHtml(t)}</td>
-        </tr>`
+        `<tr class="fade-in"><td class="px-3 py-2 font-medium">${escapeHtml(g)}</td><td class="px-3 py-2 text-center">→</td><td class="px-3 py-2">${escapeHtml(t)}</td></tr>`
       ).join("");
       $pairsTableBody.innerHTML = rows;
     }
@@ -223,44 +194,38 @@
       $status.textContent = "Сохраняем круг…";
       $saveBtn.disabled = true;
 
-      const res = await fetch(GAS_WEB_APP_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "saveRound", pairs: state.currentPairs })
+      const qs = new URLSearchParams({
+        action: "saveRound",
+        pairs: JSON.stringify(state.currentPairs)
       });
-      const data = await res.json();
-      if (!data.ok) {
-        $status.textContent = "Ошибка сохранения: " + (data.error || "неизвестно");
+
+      try {
+        const res = await fetch(`${GAS_WEB_APP_URL}?${qs.toString()}`, { method: "GET" });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || "Save failed");
+
+        await refreshData();
+        renderHistory();
+        $status.textContent = `Сохранено как круг #${data.roundId}.`;
+        $saveBtn.disabled = true;
+        $saveBtn.className = "rounded-xl px-4 py-2 bg-stone-200 text-stone-500 font-medium cursor-not-allowed";
+      } catch (err) {
+        $status.textContent = "Ошибка сохранения: " + err.message;
         $saveBtn.disabled = false;
-        return;
       }
-      // Обновим данные и UI
-      await refreshData();
-      renderHistory();
-      $status.textContent = `Сохранено как круг #${data.roundId}.`;
-      $saveBtn.disabled = true;
-      $saveBtn.className = "rounded-xl px-4 py-2 bg-stone-200 text-stone-500 font-medium cursor-not-allowed";
     }
 
-    // ====== Алгоритм: дерранжмент с ограничениями по запрещённым парам ======
     function findDerangementWithConstraints(people, forbidden) {
-      // домены: для каждого i (giver = people[i]) список допустимых receiver
       const n = people.length;
-      const domains = people.map((giver, i) => {
-        return people.filter((rcv, j) =>
-          i !== j && !forbidden.has(`${giver}||${rcv}`)
-        );
-      });
-
-      // быстрый провал, если кто-то вообще никого не может получить
+      const domains = people.map((giver, i) =>
+        people.filter((rcv, j) => i !== j && !forbidden.has(`${giver}||${rcv}`))
+      );
       if (domains.some(d => d.length === 0)) return null;
 
-      const assignment = new Array(n).fill(null); // receiver per index i
+      const assignment = new Array(n).fill(null);
       const used = new Set();
 
-      // Backtracking с MRV (выбираем переменную с минимальным доменом)
       function backtrack() {
-        // найдём первую не назначенную переменную
         let varIndex = -1, bestSize = Infinity;
         for (let i = 0; i < n; i++) {
           if (assignment[i] !== null) continue;
@@ -271,12 +236,9 @@
             if (bestSize === 0) break;
           }
         }
-        if (varIndex === -1) return true; // назначены все
-
-        // Порядок значений случайный для разнообразия
+        if (varIndex === -1) return true;
         const candidates = domains[varIndex].filter(v => !used.has(v));
         shuffleInPlace(candidates);
-
         for (const val of candidates) {
           assignment[varIndex] = val;
           used.add(val);
@@ -300,7 +262,7 @@
     }
 
     function escapeHtml(s) {
-      return s.replace(/[&<>"']/g, (ch) =>
+      return s.replace(/[&<>"']/g, ch =>
         ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[ch])
       );
     }
