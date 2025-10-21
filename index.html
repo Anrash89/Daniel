@@ -6,26 +6,10 @@
   <title>Молитвенный круг</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    .halo {
-      position: absolute;
-      inset: -40px;
-      border-radius: 9999px;
-      background: radial-gradient(closest-side, rgba(255,255,255,.35), transparent 70%);
-      filter: blur(12px);
-      animation: pulse 3s ease-in-out infinite;
-      pointer-events: none;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: .6; transform: scale(1); }
-      50% { opacity: .9; transform: scale(1.03); }
-    }
-    .fade-in {
-      animation: fade .5s ease forwards;
-      opacity: 0;
-    }
-    @keyframes fade {
-      to { opacity: 1; }
-    }
+    .halo{position:absolute;inset:-40px;border-radius:9999px;background:radial-gradient(closest-side,rgba(255,255,255,.35),transparent 70%);filter:blur(12px);animation:pulse 3s ease-in-out infinite;pointer-events:none}
+    @keyframes pulse{0%,100%{opacity:.6;transform:scale(1)}50%{opacity:.9;transform:scale(1.03)}}
+    .fade-in{animation:fade .5s ease forwards;opacity:0}
+    @keyframes fade{to{opacity:1}}
   </style>
 </head>
 <body class="min-h-screen bg-amber-50 text-stone-800 antialiased">
@@ -33,13 +17,12 @@
 
   <main class="relative container mx-auto px-4 py-10">
     <header class="mb-8 text-center">
-      <h1 class="text-3xl md:text-4xl font-semibold tracking-tight">
-        Молитвенный круг
-      </h1>
+      <h1 class="text-3xl md:text-4xl font-semibold tracking-tight">Молитвенный круг</h1>
       <p class="text-stone-600 mt-2">Справедливая жеребьёвка: без самоназначений и без повторов пар из последних 5 кругов.</p>
     </header>
 
     <section class="grid md:grid-cols-3 gap-6">
+      <!-- Левая колонка -->
       <div class="md:col-span-1">
         <div class="relative bg-white rounded-2xl shadow p-5">
           <div class="halo"></div>
@@ -54,12 +37,11 @@
           <button id="generateBtn" class="w-full rounded-xl px-4 py-3 bg-amber-600 text-white font-medium hover:bg-amber-700 active:scale-[.99] transition">
             Сформировать новый круг
           </button>
-          <p class="text-xs text-stone-500 mt-2">
-            Алгоритм подбирает перестановку (дерранжмент) с учётом истории 5 последних кругов.
-          </p>
+          <p class="text-xs text-stone-500 mt-2">Алгоритм подбирает перестановку (дерранжмент) с учётом истории 5 последних кругов.</p>
         </div>
       </div>
 
+      <!-- Центр -->
       <div class="md:col-span-2">
         <div class="relative bg-white rounded-2xl shadow p-6">
           <div class="halo"></div>
@@ -80,13 +62,12 @@
           </div>
 
           <div class="mt-5 flex gap-3">
-            <button id="saveBtn" disabled class="rounded-xl px-4 py-2 bg-stone-200 text-stone-500 font-medium cursor-not-allowed">
-              Сохранить круг
-            </button>
+            <button id="saveBtn" disabled class="rounded-xl px-4 py-2 bg-stone-200 text-stone-500 font-medium cursor-not-allowed">Сохранить круг</button>
             <span id="status" class="text-sm text-stone-500"></span>
           </div>
         </div>
 
+        <!-- История -->
         <div class="mt-6 bg-white rounded-2xl shadow p-6">
           <h2 class="text-lg font-medium mb-4">Последние 5 кругов</h2>
           <div id="history" class="space-y-4 text-sm">
@@ -98,7 +79,7 @@
   </main>
 
   <script>
-    // ====== URL твоего скрипта ======
+    // ====== URL Apps Script (твой) ======
     const GAS_WEB_APP_URL = "https://script.google.com/macros/library/d/1VRlb8nm7euYY2moZMuJUYTIHUxDQzbqIBDBl8uFvqGdEAIszg1B85_ci/2";
 
     const state = { people: [], lastRounds: [], currentPairs: null };
@@ -110,20 +91,50 @@
     const $saveBtn = document.getElementById('saveBtn');
     const $status = document.getElementById('status');
 
+    // ---------- JSONP ----------
+    function jsonp(url, params = {}) {
+      return new Promise((resolve, reject) => {
+        const cb = 'cb_' + Math.random().toString(36).slice(2);
+        const script = document.createElement('script');
+        params.callback = cb;
+        const qs = new URLSearchParams(params).toString();
+
+        window[cb] = (data) => {
+          cleanup();
+          resolve(data);
+        };
+        script.onerror = () => {
+          cleanup();
+          reject(new Error('JSONP load error'));
+        };
+        script.src = url + (url.includes('?') ? '&' : '?') + qs;
+        document.head.appendChild(script);
+
+        function cleanup() {
+          delete window[cb];
+          if (script.parentNode) script.parentNode.removeChild(script);
+        }
+      });
+    }
+
+    // ---------- Инициализация ----------
     init();
 
     async function init() {
-      await refreshData();
-      renderPeople();
-      renderHistory();
-      $generateBtn.addEventListener('click', onGenerate);
-      $saveBtn.addEventListener('click', onSave);
+      try {
+        await refreshData();
+        renderPeople();
+        renderHistory();
+        $generateBtn.addEventListener('click', onGenerate);
+        $saveBtn.addEventListener('click', onSave);
+      } catch (e) {
+        $status.textContent = "Ошибка загрузки: " + e.message;
+      }
     }
 
     async function refreshData() {
       $status.textContent = "Загружаем данные…";
-      const res = await fetch(`${GAS_WEB_APP_URL}?action=get`);
-      const data = await res.json();
+      const data = await jsonp(GAS_WEB_APP_URL, { action: "get" });
       if (!data.ok) throw new Error(data.error || "Ошибка загрузки");
       state.people = data.people || [];
       state.lastRounds = data.lastRounds || [];
@@ -167,10 +178,13 @@
         return;
       }
       $status.textContent = "Ищем допустимую перестановку…";
+
       const forbidden = new Set();
       state.lastRounds.forEach(r => (r.pairs || []).forEach(([g, t]) => forbidden.add(`${g}||${t}`)));
+
       const people = [...state.people];
       const solution = findDerangementWithConstraints(people, forbidden);
+
       if (!solution) {
         $status.textContent = "Не получилось составить круг. Добавьте участников.";
         return;
@@ -193,17 +207,12 @@
       if (!state.currentPairs) return;
       $status.textContent = "Сохраняем круг…";
       $saveBtn.disabled = true;
-
-      const qs = new URLSearchParams({
-        action: "saveRound",
-        pairs: JSON.stringify(state.currentPairs)
-      });
-
       try {
-        const res = await fetch(`${GAS_WEB_APP_URL}?${qs.toString()}`, { method: "GET" });
-        const data = await res.json();
+        const data = await jsonp(GAS_WEB_APP_URL, {
+          action: "saveRound",
+          pairs: JSON.stringify(state.currentPairs)
+        });
         if (!data.ok) throw new Error(data.error || "Save failed");
-
         await refreshData();
         renderHistory();
         $status.textContent = `Сохранено как круг #${data.roundId}.`;
@@ -215,42 +224,35 @@
       }
     }
 
+    // ====== Алгоритм с ограничениями ======
     function findDerangementWithConstraints(people, forbidden) {
       const n = people.length;
       const domains = people.map((giver, i) =>
         people.filter((rcv, j) => i !== j && !forbidden.has(`${giver}||${rcv}`))
       );
       if (domains.some(d => d.length === 0)) return null;
-
       const assignment = new Array(n).fill(null);
       const used = new Set();
 
       function backtrack() {
-        let varIndex = -1, bestSize = Infinity;
+        let varIndex = -1, best = Infinity;
         for (let i = 0; i < n; i++) {
           if (assignment[i] !== null) continue;
           const size = domains[i].filter(v => !used.has(v)).length;
-          if (size < bestSize) {
-            bestSize = size;
-            varIndex = i;
-            if (bestSize === 0) break;
-          }
+          if (size < best) { best = size; varIndex = i; if (best === 0) break; }
         }
         if (varIndex === -1) return true;
         const candidates = domains[varIndex].filter(v => !used.has(v));
         shuffleInPlace(candidates);
         for (const val of candidates) {
-          assignment[varIndex] = val;
-          used.add(val);
+          assignment[varIndex] = val; used.add(val);
           if (backtrack()) return true;
-          assignment[varIndex] = null;
-          used.delete(val);
+          assignment[varIndex] = null; used.delete(val);
         }
         return false;
       }
 
-      if (!backtrack()) return null;
-      return assignment;
+      return backtrack() ? assignment : null;
     }
 
     function shuffleInPlace(arr) {
