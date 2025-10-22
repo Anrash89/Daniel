@@ -262,7 +262,7 @@
         const candidates = domains[varIndex].filter(v => !used.has(v));
         shuffleInPlace(candidates);
         for (const val of candidates) {
-          assignment[varIndex] = val; used.add(val;
+          assignment[varIndex] = val; used.add(val);
           if (backtrack()) return true;
           assignment[varIndex] = null; used.delete(val);
         }
