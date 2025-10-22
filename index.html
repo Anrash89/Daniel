@@ -149,28 +149,43 @@
       $peopleList.innerHTML = state.people.map(name => `<li class="fade-in">${escapeHtml(name)}</li>`).join("");
     }
 
-    function renderHistory() {
-      if (!state.lastRounds.length) {
-        $history.innerHTML = '<div class="italic text-stone-400">История пока пустая.</div>';
-        return;
-      }
-      $history.innerHTML = state.lastRounds.map(r => {
-        const date = r.ts ? new Date(r.ts) : null;
-        const nice = date ? date.toLocaleString() : "(без даты)";
-        const rows = r.pairs.map(([g, t]) =>
-          `<tr><td class="px-2 py-1">${escapeHtml(g)}</td><td class="px-2 py-1 text-center">→</td><td class="px-2 py-1">${escapeHtml(t)}</td></tr>`
-        ).join("");
-        return `
-          <div class="rounded-xl border border-stone-100">
-            <div class="px-3 py-2 bg-stone-50 text-stone-600">Круг #${r.roundId} • ${nice}</div>
-            <div class="overflow-x-auto">
-              <table class="min-w-full text-sm">
-                <tbody>${rows}</tbody>
-              </table>
-            </div>
-          </div>`;
-      }).join("");
-    }
+function renderHistory() {
+  if (!state.lastRounds.length) {
+    $history.innerHTML = '<div class="italic text-stone-400">История пока пустая.</div>';
+    return;
+  }
+
+  $history.innerHTML = state.lastRounds.map(r => {
+    const date = r.ts ? new Date(r.ts) : null;
+    const nice = date ? date.toLocaleString() : "(без даты)";
+    const rows = r.pairs
+      .map(([g, t]) => `
+        <div class="flex flex-col sm:flex-row sm:items-center gap-2 border-b border-stone-100 py-2">
+          <div class="flex items-center gap-2 min-w-[180px]">
+            <span class="text-rose-500">●</span>
+            <span class="font-medium">${escapeHtml(g)}</span>
+          </div>
+          <div class="text-center text-stone-400 sm:px-2">→</div>
+          <div class="flex items-center gap-2">
+            <span class="text-rose-500">●</span>
+            <span>${escapeHtml(t)}</span>
+          </div>
+        </div>
+      `)
+      .join("");
+
+    return `
+      <div class="rounded-xl border border-stone-200 bg-white overflow-hidden">
+        <div class="px-4 py-2 bg-stone-50 text-stone-600 font-medium">
+          Круг #${r.roundId} • ${nice}
+        </div>
+        <div class="px-4 py-2 divide-y divide-stone-100">
+          ${rows}
+        </div>
+      </div>
+    `;
+  }).join("");
+}
 
     async function onGenerate() {
       if (state.people.length < 2) {
