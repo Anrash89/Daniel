@@ -135,7 +135,7 @@
       $peopleList.innerHTML = state.people.map(name => `<li class="fade-in">${escapeHtml(name)}</li>`).join("");
     }
 
-    // ===== История: вертикальный список пар =====
+    // ===== История: вертикальный вывод пары (строка-главный, стрелка вниз, строка-цель) =====
     function renderHistory() {
       if (!state.lastRounds.length) {
         $history.innerHTML = '<div class="italic text-stone-400">История пока пустая.</div>';
@@ -147,11 +147,16 @@
         const nice = date ? date.toLocaleString() : "(без даты)";
 
         const rows = (r.pairs || []).map(([g, t]) => `
-          <div class="py-2">
-            <span class="text-rose-500">●</span>
-            <span class="ml-2 font-medium">${escapeHtml(g)}</span>
-            <span class="mx-2 text-stone-400">→</span>
-            <span>${escapeHtml(t)}</span>
+          <div class="py-3">
+            <div class="flex items-center gap-2">
+              <span class="text-rose-500">●</span>
+              <span class="font-medium">${escapeHtml(g)}</span>
+            </div>
+            <div class="pl-5 text-stone-400 select-none">↓</div>
+            <div class="flex items-center gap-2">
+              <span class="text-rose-500">●</span>
+              <span>${escapeHtml(t)}</span>
+            </div>
           </div>
         `).join("");
 
@@ -168,7 +173,7 @@
       }).join("");
     }
 
-    // ===== Текущий круг: вертикальный список пар =====
+    // ===== Текущий круг: вертикальный вывод пары =====
     function renderCurrentPairs() {
       const $list = document.getElementById('pairsList');
       if (!state.currentPairs || !state.currentPairs.length) {
@@ -176,11 +181,16 @@
         return;
       }
       const rows = state.currentPairs.map(([g, t]) => `
-        <div class="py-2 fade-in">
-          <span class="text-rose-500">●</span>
-          <span class="ml-2 font-medium">${escapeHtml(g)}</span>
-          <span class="mx-2 text-stone-400">→</span>
-          <span>${escapeHtml(t)}</span>
+        <div class="py-3 fade-in">
+          <div class="flex items-center gap-2">
+            <span class="text-rose-500">●</span>
+            <span class="font-medium">${escapeHtml(g)}</span>
+          </div>
+          <div class="pl-5 text-stone-400 select-none">↓</div>
+          <div class="flex items-center gap-2">
+            <span class="text-rose-500">●</span>
+            <span>${escapeHtml(t)}</span>
+          </div>
         </div>
       `).join("");
       $list.innerHTML = rows;
@@ -252,7 +262,7 @@
         const candidates = domains[varIndex].filter(v => !used.has(v));
         shuffleInPlace(candidates);
         for (const val of candidates) {
-          assignment[varIndex] = val; used.add(val);
+          assignment[varIndex] = val; used.add(val;
           if (backtrack()) return true;
           assignment[varIndex] = null; used.delete(val);
         }
