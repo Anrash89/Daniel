@@ -46,19 +46,12 @@
         <div class="relative bg-white rounded-2xl shadow p-6">
           <div class="halo"></div>
           <h2 class="text-lg font-medium mb-4">Текущий круг</h2>
+
+          <!-- ВЕРТИКАЛЬНЫЙ СПИСОК ПАР -->
           <div class="overflow-x-auto">
-            <table class="min-w-full text-sm">
-              <thead>
-                <tr class="text-left text-stone-500">
-                  <th class="px-3 py-2">Кто молится</th>
-                  <th class="px-3 py-2"></th>
-                  <th class="px-3 py-2">За кого</th>
-                </tr>
-              </thead>
-              <tbody id="pairsTableBody">
-                <tr><td class="px-3 py-3 italic text-stone-400" colspan="3">Нажмите «Сформировать новый круг»</td></tr>
-              </tbody>
-            </table>
+            <div id="pairsList" class="divide-y divide-stone-100">
+              <div class="italic text-stone-400 py-3">Нажмите «Сформировать новый круг»</div>
+            </div>
           </div>
 
           <div class="mt-5 flex gap-3">
@@ -79,13 +72,12 @@
   </main>
 
   <script>
-    // ====== URL Apps Script (твой) ======
+    // ====== URL Apps Script ======
     const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzJCV1bGiwI0nLpFSrfplqegQ5IFKIOfW0KyihozEY-2EMj-vawRMn7rInZqqnSUfFtaQ/exec";
 
     const state = { people: [], lastRounds: [], currentPairs: null };
 
     const $peopleList = document.getElementById('peopleList');
-    const $pairsTableBody = document.getElementById('pairsTableBody');
     const $history = document.getElementById('history');
     const $generateBtn = document.getElementById('generateBtn');
     const $saveBtn = document.getElementById('saveBtn');
@@ -99,14 +91,8 @@
         params.callback = cb;
         const qs = new URLSearchParams(params).toString();
 
-        window[cb] = (data) => {
-          cleanup();
-          resolve(data);
-        };
-        script.onerror = () => {
-          cleanup();
-          reject(new Error('JSONP load error'));
-        };
+        window[cb] = (data) => { cleanup(); resolve(data); };
+        script.onerror = () => { cleanup(); reject(new Error('JSONP load error')); };
         script.src = url + (url.includes('?') ? '&' : '?') + qs;
         document.head.appendChild(script);
 
@@ -149,43 +135,56 @@
       $peopleList.innerHTML = state.people.map(name => `<li class="fade-in">${escapeHtml(name)}</li>`).join("");
     }
 
-function renderHistory() {
-  if (!state.lastRounds.length) {
-    $history.innerHTML = '<div class="italic text-stone-400">История пока пустая.</div>';
-    return;
-  }
+    // ===== История: вертикальный список пар =====
+    function renderHistory() {
+      if (!state.lastRounds.length) {
+        $history.innerHTML = '<div class="italic text-stone-400">История пока пустая.</div>';
+        return;
+      }
 
-  $history.innerHTML = state.lastRounds.map(r => {
-    const date = r.ts ? new Date(r.ts) : null;
-    const nice = date ? date.toLocaleString() : "(без даты)";
-    const rows = r.pairs
-      .map(([g, t]) => `
-        <div class="flex flex-col sm:flex-row sm:items-center gap-2 border-b border-stone-100 py-2">
-          <div class="flex items-center gap-2 min-w-[180px]">
+      $history.innerHTML = state.lastRounds.map(r => {
+        const date = r.ts ? new Date(r.ts) : null;
+        const nice = date ? date.toLocaleString() : "(без даты)";
+
+        const rows = (r.pairs || []).map(([g, t]) => `
+          <div class="py-2">
             <span class="text-rose-500">●</span>
-            <span class="font-medium">${escapeHtml(g)}</span>
-          </div>
-          <div class="text-center text-stone-400 sm:px-2">→</div>
-          <div class="flex items-center gap-2">
-            <span class="text-rose-500">●</span>
+            <span class="ml-2 font-medium">${escapeHtml(g)}</span>
+            <span class="mx-2 text-stone-400">→</span>
             <span>${escapeHtml(t)}</span>
           </div>
-        </div>
-      `)
-      .join("");
+        `).join("");
 
-    return `
-      <div class="rounded-xl border border-stone-200 bg-white overflow-hidden">
-        <div class="px-4 py-2 bg-stone-50 text-stone-600 font-medium">
-          Круг #${r.roundId} • ${nice}
+        return `
+          <div class="rounded-xl border border-stone-200 bg-white overflow-hidden">
+            <div class="px-4 py-2 bg-stone-50 text-stone-600 font-medium">
+              Круг #${r.roundId} • ${nice}
+            </div>
+            <div class="px-4 py-2 divide-y divide-stone-100">
+              ${rows}
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    // ===== Текущий круг: вертикальный список пар =====
+    function renderCurrentPairs() {
+      const $list = document.getElementById('pairsList');
+      if (!state.currentPairs || !state.currentPairs.length) {
+        $list.innerHTML = '<div class="italic text-stone-400 py-3">Нажмите «Сформировать новый круг»</div>';
+        return;
+      }
+      const rows = state.currentPairs.map(([g, t]) => `
+        <div class="py-2 fade-in">
+          <span class="text-rose-500">●</span>
+          <span class="ml-2 font-medium">${escapeHtml(g)}</span>
+          <span class="mx-2 text-stone-400">→</span>
+          <span>${escapeHtml(t)}</span>
         </div>
-        <div class="px-4 py-2 divide-y divide-stone-100">
-          ${rows}
-        </div>
-      </div>
-    `;
-  }).join("");
-}
+      `).join("");
+      $list.innerHTML = rows;
+    }
 
     async function onGenerate() {
       if (state.people.length < 2) {
@@ -209,13 +208,6 @@ function renderHistory() {
       $saveBtn.disabled = false;
       $saveBtn.className = "rounded-xl px-4 py-2 bg-emerald-600 text-white font-medium hover:bg-emerald-700 transition";
       $status.textContent = "Круг готов. Можно сохранить.";
-    }
-
-    function renderCurrentPairs() {
-      const rows = state.currentPairs.map(([g, t]) =>
-        `<tr class="fade-in"><td class="px-3 py-2 font-medium">${escapeHtml(g)}</td><td class="px-3 py-2 text-center">→</td><td class="px-3 py-2">${escapeHtml(t)}</td></tr>`
-      ).join("");
-      $pairsTableBody.innerHTML = rows;
     }
 
     async function onSave() {
